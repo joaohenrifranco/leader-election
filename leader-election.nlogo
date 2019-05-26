@@ -1,27 +1,31 @@
 
-
 to setup
   clear-all
-  create-turtles 30
+  create-turtles node-count
   reset-ticks
 
   ask turtles [
-    setxy random 40 random 40
+    setxy random world-width random world-height
   ]
 end
 
 to go
-  ask links [die]
+  ask links [
+    if link-length > radius [die]
+  ]
 
   ask turtles [
-    ask other turtles in-radius 3 [
-      create-link-from myself
+    ask other turtles in-radius radius [
+      if not out-link-neighbor? myself [
+        create-link-from myself
+        ask my-links [set color 2]
+      ]
     ]
 
   ]
 
   ask turtles [
-    fd 1
+    fd 0.001
   ]
 end
 @#$#@#$#@
@@ -42,10 +46,10 @@ GRAPHICS-WINDOW
 1
 1
 1
--16
-16
--16
-16
+0
+32
+0
+32
 0
 0
 1
@@ -76,7 +80,7 @@ BUTTON
 69
 NIL
 go
-NIL
+T
 1
 T
 OBSERVER
@@ -85,6 +89,36 @@ NIL
 NIL
 NIL
 1
+
+SLIDER
+8
+84
+180
+117
+radius
+radius
+3
+15
+8.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+10
+126
+182
+159
+node-count
+node-count
+2
+100
+20.0
+1
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -442,8 +476,6 @@ default
 link direction
 true
 0
-Line -7500403 true 150 150 90 180
-Line -7500403 true 150 150 210 180
 @#$#@#$#@
 0
 @#$#@#$#@
