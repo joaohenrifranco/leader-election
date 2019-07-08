@@ -7,15 +7,15 @@ turtles-own [
   lmsg ;; Leader msg, color to assume
   lupdate? ;; got update from leader, boolean
   ltimeout ;; Click since last leader ping
-  ehost ;; Who started election (host)
-  eparent ;; My level on current election
-  ewinner ;; Greatest id among turtle and tree children
-  edone ;; Done local election
+
+  erunning? ;; Election running
+;  ehost ;; Who started election (host)
+;  eparent ;; My level on current election
+;  ewinner ;; Greatest id among turtle and tree children
 ]
 
 globals [
   alive-interval
-  leader-alive
 ]
 
 to setup
@@ -23,13 +23,13 @@ to setup
   create-turtles node-count
   reset-ticks
 
-  set leader-alive true
-  set alive-interval 50
+  set alive-interval 4
 
   ask turtles [
     setxy random world-width random world-height
     set color 25
     set lupdate? false
+    set erunning? false
     set lid -1
   ]
 
@@ -38,10 +38,6 @@ to setup
   ask leaders [set color 64]
 
   ask turtles [
-    set eparent -1
-    set ewinner -1
-    set ehost -1
-    set edone false
     ask other turtles in-radius radius [
       if not out-link-neighbor? myself [
         create-link-from myself
@@ -63,7 +59,7 @@ to go
 
     ;; Send request every alive interval
     if ticks mod alive-interval = 0 [
-      show ["Leader is alive "]
+      show "I am the leader"
       set lupdate? true
       set lmsg random 140
       set lid who
@@ -85,68 +81,36 @@ to go
     ;; Send neighbors leader updates
     if lupdate? [
       set lupdate? false
-      set edone false
-      set ehost -1
-      set eparent -1
-      set ewinner -1
       ask link-neighbors with [breed != leaders] with [lid != [lid] of myself or lmsg != [lmsg] of myself ][
         show word "Leader is " [lid] of myself
         set ltimeout 0
         set lupdate? true
         set lmsg [lmsg] of myself
-        set color lid * 3
         set lid [lid] of myself
+        set color lid * 3
         set llink [who] of myself
         set ldist [ldist] of myself + 1
       ]
     ]
 
-    set ltimeout ltimeout + 1
-    if breed != leaders and ltimeout > alive-interval * (3 + ldist) [
-      show "Leader is dead"
-      set leader-alive false
-      set lid -1
-      set eparent -1 ;; I am the root in election tree
-      set ehost who ;; I am also the host
-      set edone false ;; I am not done
-    ]
-
-    if ehost > -1 [ ;; I have a election
-      if not edone [ ;; If I am not done
-        ask link-neighbors with [ehost < [ehost] of myself or eparent = -1]  [ ;; Find my children
-          set ehost [ehost] of myself
-          set eparent [who] of myself ;; Turtle, I am your father
-          set edone false
-        ]
-        if count link-neighbors with [eparent = who] = 0 [ ;; I dont have children
-          set ewinner who ;; I am local winner
-          set edone true ;; I am done
-        ]
+    ifelse not erunning? [
+      ;; If no election is running
+      set ltimeout ltimeout + 1
+      ;; If leader is dead start election
+      if breed != leaders and ltimeout > alive-interval * (3 + ldist) [
+        show "Leader is dead"
+        set lid -1
       ]
-
-      if count link-neighbors with [edone = false and eparent = who] = 0 [ ;; All children are done
-        if count link-neighbors with [eparent = who] > 0 [ ;; If I have children
-          set ewinner max [who] of link-neighbors with [eparent = who] ;; Declare local winner
-        ]
-        if ewinner < who [
-          set ewinner who ;; Maybe I should win?
-        ]
-        set edone true ;; I am done
-      ]
+    ][ ;; If election is running
     ]
 
-    if edone =  true and ehost = who [
-      set breed leaders
-      set leader-alive true
-      set ehost -1
-      set ewinner -1
-      set edone false
-      set eparent -1
-    ]
+
+
 
     ;; If able, move
-    if leader-alive [ fd 0.01 * speed ]
+    if lid != -1 [ fd 0.01 * speed ]
 
+    ;; Draw radius
     hatch 1 [
       set shape "Circle"
       set size radius
@@ -213,7 +177,7 @@ BUTTON
 69
 NIL
 go
-T
+NIL
 1
 T
 OBSERVER
