@@ -1,4 +1,6 @@
 breed [leaders leader]
+directed-link-breed [treeNodes treeNode]
+undirected-link-breed [connectedNodes connectedNode]
 
 turtles-own [
   llink ;; Link to leader
@@ -7,10 +9,12 @@ turtles-own [
   lmsg ;; Leader msg, color to assume
   lupdate? ;; got update from leader, boolean
   ltimeout ;; Click since last leader ping
-  ehost ;; Who started election (host)
-  eparent ;; My level on current election
-  ewinner ;; Greatest id among turtle and tree children
-  edone ;; Done local election
+
+  eHost ;; Who started election (host)
+  eWinner ;; Greatest id among turtle and tree children
+  eDone ;; Done local election
+  onElection
+  eChildrenSet
 ]
 
 globals [
@@ -24,7 +28,7 @@ to setup
   reset-ticks
 
   set leader-alive true
-  set alive-interval 50
+  set alive-interval 25
 
   ask turtles [
     setxy random world-width random world-height
@@ -38,14 +42,15 @@ to setup
   ask leaders [set color 64]
 
   ask turtles [
-    set eparent -1
-    set ewinner -1
-    set ehost -1
-    set edone false
+    set eWinner -1
+    set eHost -1
+    set eDone false
+    set onElection false
+    set eChildrenSet false
     ask other turtles in-radius radius [
-      if not out-link-neighbor? myself [
-        create-link-from myself
-        ask my-links [set color 2]
+      if not out-connectedNode-neighbor? myself [
+        create-connectedNode-with myself
+        ask my-links with [breed = connectedNodes] [set color 2]
       ]
     ]
   ]
@@ -53,14 +58,17 @@ to setup
 end
 
 to go
-  clear-drawing
-  ask links [
+  ask connectedNodes [
     if link-length > radius [die]
   ]
 
-    ;; leader each click code
-  ask leaders [
+  ask treeNodes [
+    set shape "arrow"
+    set color [100 100 100]
+  ]
 
+  ;; leader each click code
+  ask leaders [
     ;; Send request every alive interval
     if ticks mod alive-interval = 0 [
       show ["Leader is alive "]
@@ -76,86 +84,90 @@ to go
   ask turtles [
     ;;  Connect to neighbors
     ask other turtles in-radius radius [
-      if not out-link-neighbor? myself [
-        create-link-from myself
-        ask my-links [set color 2]
+      if not connectedNode-neighbor? myself [
+        create-connectedNode-with myself
+        ask my-connectedNodes [set color 2]
       ]
     ]
 
     ;; Send neighbors leader updates
     if lupdate? [
+      set eWinner -1
+      set eHost -1
+      set eDone false
+      set onElection false
+      set eChildrenSet false
+
       set lupdate? false
-      set edone false
-      set ehost -1
-      set eparent -1
-      set ewinner -1
-      ask link-neighbors with [breed != leaders] with [lid != [lid] of myself or lmsg != [lmsg] of myself ][
+      ask connectedNode-neighbors with [breed != leaders] with [lid != [lid] of myself or lmsg != [lmsg] of myself ][
         show word "Leader is " [lid] of myself
+        set leader-alive true
         set ltimeout 0
         set lupdate? true
         set lmsg [lmsg] of myself
-        set color lid * 3
         set lid [lid] of myself
+        set color lid * 3
         set llink [who] of myself
         set ldist [ldist] of myself + 1
       ]
     ]
 
     set ltimeout ltimeout + 1
-    if breed != leaders and ltimeout > alive-interval * (3 + ldist) [
+
+
+    if not onElection and breed != leaders and ltimeout > alive-interval * (3 + ldist) [
       show "Leader is dead"
       set leader-alive false
       set lid -1
-      set eparent -1 ;; I am the root in election tree
-      set ehost who ;; I am also the host
-      set edone false ;; I am not done
+      set eHost who ;; I am also the host
+      set eDone false ;; I am not done
+      set onElection true
+      set eWinner -1
+      set eChildrenSet false
+
     ]
 
-    if ehost > -1 [ ;; I have a election
-      if not edone [ ;; If I am not done
-        ask link-neighbors with [ehost < [ehost] of myself or eparent = -1]  [ ;; Find my children
-          set ehost [ehost] of myself
-          set eparent [who] of myself ;; Turtle, I am your father
-          set edone false
+    if onElection [
+      ifelse not eChildrenSet [ ;; If I have not set my children
+        set eChildrenSet true
+        ask connectedNode-neighbors with [eHost < [eHost] of myself] [ ;; Ask all neighbors with lower host election or no election
+          ask my-in-links with [breed = treeNodes] [die] ;; Delete old links
+          create-treeNode-from turtle [who] of myself ;; To be my children
+          set onElection true
+          set eWinner -1
+          set eDone false ;; To be not done
+          ;; set eChildrenSet false ;; Reset their children
+          set eHost [eHost] of myself
         ]
-        if count link-neighbors with [eparent = who] = 0 [ ;; I dont have children
-          set ewinner who ;; I am local winner
-          set edone true ;; I am done
+      ][ ;; I have set my children
+        if count out-treeNode-neighbors with [eChildrenSet = false or eDone = false] = 0 [ ;; All my children have set their children and are done
+           ifelse count out-treeNode-neighbors != 0 [set eWinner max [who] of out-treeNode-neighbors] [set eWinner -1]
+           if eWinner < who [set eWinner who] ;; If no one is bigger than me I am local winner
+           set eDone true
+        ]
+        if eDone and count in-treeNode-neighbors = 0 [
+          show word "HOST " who
+          set color [100 100 100]
+          ask turtle eWinner [set breed leaders]
+          set lid eWinner
+          set leader-alive true
+          ask other turtles [
+            set ltimeout 0
+;            ask my-links with [breed = treeNodes] [die]
+          ]
+          set ltimeout 0
+          set eWinner -1
+          set eHost -1
+          set eDone false
+          set onElection false
+          set eChildrenSet false
         ]
       ]
-
-      if count link-neighbors with [edone = false and eparent = who] = 0 [ ;; All children are done
-        if count link-neighbors with [eparent = who] > 0 [ ;; If I have children
-          set ewinner max [who] of link-neighbors with [eparent = who] ;; Declare local winner
-        ]
-        if ewinner < who [
-          set ewinner who ;; Maybe I should win?
-        ]
-        set edone true ;; I am done
-      ]
-    ]
-
-    if edone =  true and ehost = who [
-      set breed leaders
-      set leader-alive true
-      set ehost -1
-      set ewinner -1
-      set edone false
-      set eparent -1
     ]
 
     ;; If able, move
     if leader-alive [ fd 0.01 * speed ]
-
-    hatch 1 [
-      set shape "Circle"
-      set size radius
-      set color [20 20 20 100]
-      stamp
-      die
-    ]
   ]
-
   ;; Log alive clock ticks
   if ticks mod alive-interval = 0 [show ticks]
 
@@ -165,11 +177,11 @@ end
 GRAPHICS-WINDOW
 194
 11
-612
-430
+731
+549
 -1
 -1
-12.42424242424243
+16.03030303030303
 1
 10
 1
@@ -231,8 +243,8 @@ SLIDER
 radius
 radius
 3
-15
-10.0
+50
+50.0
 1
 1
 NIL
@@ -247,7 +259,7 @@ node-count
 node-count
 2
 100
-20.0
+30.0
 1
 1
 NIL
@@ -279,7 +291,7 @@ speed
 speed
 0
 20
-9.0
+6.0
 1
 1
 NIL
@@ -641,6 +653,17 @@ default
 link direction
 true
 0
+
+arrow
+0.0
+-0.2 0 0.0 1.0
+0.0 1 1.0 0.0
+0.2 0 0.0 1.0
+link direction
+true
+0
+Line -7500403 true 150 150 90 180
+Line -7500403 true 150 150 210 180
 @#$#@#$#@
 0
 @#$#@#$#@
