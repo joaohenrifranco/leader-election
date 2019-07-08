@@ -53,6 +53,7 @@ to setup
 end
 
 to go
+  clear-drawing
   ask links [
     if link-length > radius [die]
   ]
@@ -145,6 +146,14 @@ to go
 
     ;; If able, move
     if leader-alive [ fd 0.01 * speed ]
+
+    hatch 1 [
+      set shape "Circle"
+      set size radius
+      set color [20 20 20 100]
+      stamp
+      die
+    ]
   ]
 
   ;; Log alive clock ticks
