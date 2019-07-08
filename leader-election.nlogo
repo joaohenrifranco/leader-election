@@ -105,17 +105,17 @@ to go
       show "Leader is dead"
       set leader-alive false
       set lid -1
-      set eparent 0 ;; I am the root in election tree
+      set eparent -1 ;; I am the root in election tree
       set ehost who ;; I am also the host
       set edone false ;; I am not done
     ]
 
-    if eparent > -1 [ ;; I have a parent, lets do election stuff
-      if edone = 0 [ ;; If I am not done
+    if ehost > -1 [ ;; I have a election
+      if not edone [ ;; If I am not done
         ask link-neighbors with [ehost < [ehost] of myself or eparent = -1]  [ ;; Find my children
           set ehost [ehost] of myself
           set eparent [who] of myself ;; Turtle, I am your father
-          set edone 0
+          set edone false
         ]
         if count link-neighbors with [eparent = who] = 0 [ ;; I dont have children
           set ewinner who ;; I am local winner
@@ -123,7 +123,7 @@ to go
         ]
       ]
 
-      if count link-neighbors with [edone = false and eparent = who] = 0 or count link-neighbors = 0 [ ;; If my children are done
+      if count link-neighbors with [edone = false and eparent = who] = 0
         if count link-neighbors with [edone = false and eparent = who] != 0 [ ;; If I have children
           set ewinner max [who] of link-neighbors with [edone = false and eparent = who] ;; Declare local winner
         ]
@@ -223,7 +223,7 @@ radius
 radius
 3
 15
-10.0
+12.0
 1
 1
 NIL
