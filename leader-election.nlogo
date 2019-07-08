@@ -1,18 +1,35 @@
+breed [leaders leader]
+
+turtles-own [
+  llink ;; Link to leader
+  ldist ;; dist to leader
+  lid ;; Leader id
+  lmsg ;; Leader msg, color to assume
+  lupdate? ;; got update from leader, boolean
+  ltimeout ;; Click since last leader ping
+]
+
+globals [
+  alive-interval
+]
 
 to setup
   clear-all
   create-turtles node-count
   reset-ticks
 
+  set alive-interval 50
+
   ask turtles [
     setxy random world-width random world-height
+    set color 25
+    set lupdate? false
+    set lid -1
   ]
-end
 
-to go
-  ask links [
-    if link-length > radius [die]
-  ]
+  ask one-of turtles [ set breed leaders ]
+
+  ask leaders [set color 64]
 
   ask turtles [
     ask other turtles in-radius radius [
@@ -21,22 +38,78 @@ to go
         ask my-links [set color 2]
       ]
     ]
-
   ]
 
+end
+
+to go
+  ask links [
+    if link-length > radius [die]
+  ]
+
+    ;; leader each click code
+  ask leaders [
+
+    ;; Send request every alive interval
+    if ticks mod alive-interval = 0 [
+      show ["Leader is alive "]
+      set lupdate? true
+      set lmsg random 140
+      set lid who
+      set ldist 0
+      set llink 0
+    ]
+  ]
+
+  ;; Every turtle each click code
   ask turtles [
-    fd 0.001
+    ;;  Connect to neighbors
+    ask other turtles in-radius radius [
+      if not out-link-neighbor? myself [
+        create-link-from myself
+        ask my-links [set color 2]
+      ]
+    ]
+
+    ;; Send neighbors leader updates
+    if lupdate? [
+      set lupdate? false
+      ask link-neighbors with [breed != leaders] with [lid != [lid] of myself or lmsg != [lmsg] of myself ][
+        show word "Leader is " [lid] of myself
+        set ltimeout 0
+        set lupdate? true
+        set lmsg [lmsg] of myself
+        set color lid * 3
+        set lid [lid] of myself
+        set llink [who] of myself
+        set ldist [ldist] of myself + 1
+      ]
+    ]
+
+    set ltimeout ltimeout + 1
+    if breed != leaders and ltimeout > alive-interval * (3 + ldist) [
+      show "Leader is dead"
+      set lid -1
+    ]
+
+    ;; If able, move
+    if lid != -1 and count my-links > 0 [ fd 0.01 * speed ]
   ]
+
+  ;; Log alive clock ticks
+  if ticks mod alive-interval = 0 [show ticks]
+
+  tick-advance 1
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
 194
-24
-631
-462
+11
+612
+430
 -1
 -1
-13.0
+12.42424242424243
 1
 10
 1
@@ -50,8 +123,8 @@ GRAPHICS-WINDOW
 32
 0
 32
-0
-0
+1
+1
 1
 ticks
 30.0
@@ -99,7 +172,7 @@ radius
 radius
 3
 15
-8.0
+10.0
 1
 1
 NIL
@@ -114,6 +187,38 @@ node-count
 node-count
 2
 100
+20.0
+1
+1
+NIL
+HORIZONTAL
+
+BUTTON
+51
+210
+133
+243
+kill leader
+ask leaders [die]
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+0
+
+SLIDER
+10
+166
+182
+199
+speed
+speed
+0
+20
 20.0
 1
 1
