@@ -123,9 +123,9 @@ to go
         ]
       ]
 
-      if count link-neighbors with [edone = false and eparent = who] = 0
-        if count link-neighbors with [edone = false and eparent = who] != 0 [ ;; If I have children
-          set ewinner max [who] of link-neighbors with [edone = false and eparent = who] ;; Declare local winner
+      if count link-neighbors with [edone = false and eparent = who] = 0 [ ;; All children are done
+        if count link-neighbors with [eparent = who] > 0 [ ;; If I have children
+          set ewinner max [who] of link-neighbors with [eparent = who] ;; Declare local winner
         ]
         if ewinner < who [
           set ewinner who ;; Maybe I should win?
@@ -223,7 +223,7 @@ radius
 radius
 3
 15
-12.0
+10.0
 1
 1
 NIL
